@@ -51,9 +51,9 @@ function Invoke-CIPPStandardConditionalAccessTemplate {
     }
 
     if ($Settings.remediate -eq $true) {
-        foreach ($Setting in $Settings) {
+        foreach ($Setting in $Settings.TemplateList) {
             try {
-                $Filter = "PartitionKey eq 'CATemplate' and RowKey eq '$($Setting.TemplateList.value)'"
+                $Filter = "PartitionKey eq 'CATemplate' and RowKey eq '$($Setting.value)'"
                 $JSONObj = (Get-CippAzDataTableEntity @Table -Filter $Filter).JSON
                 $Policy = $JSONObj | ConvertFrom-Json
                 if ($Policy.conditions.userRiskLevels.count -gt 0 -or $Policy.conditions.signInRiskLevels.count -gt 0) {
@@ -63,7 +63,43 @@ function Invoke-CIPPStandardConditionalAccessTemplate {
                         continue
                     }
                 }
-                $null = New-CIPPCAPolicy -replacePattern 'displayName' -TenantFilter $tenant -state $Setting.state -RawJSON $JSONObj -Overwrite $true -APIName $APIName -Headers $Request.Headers -DisableSD $Setting.DisableSD
+                # Ensure referenced groups exist (minimal footprint)
+                $GroupRefs = @($Policy.conditions.users.includeGroups) + @($Policy.conditions.users.excludeGroups) | Where-Object { $_ -and $_ -notin 'All','None','GuestOrExternalUsers' -and -not [guid]::TryParse($_,[ref][guid]::Empty) } | Select-Object -Unique
+                foreach ($g in $GroupRefs) {
+                    try {
+                        $EscName = $g -replace "'", "''"
+                        $Found = (New-GraphGetRequest -Uri "https://graph.microsoft.com/beta/groups?`$filter=displayName eq '$EscName'&`$select=id&`$top=1" -tenantid $Tenant -asApp $true).id
+                        if (-not $Found) {
+                            $mailNick = ($g -replace '[^A-Za-z0-9]','')
+                            if (-not $mailNick) { $mailNick = (Get-Random -Minimum 10000 -Maximum 99999) }
+                            $Body = @{ displayName=$g; mailEnabled=$false; securityEnabled=$true; mailNickname=$mailNick.Substring(0,[Math]::Min(60,$mailNick.Length)) } | ConvertTo-Json -Depth 5
+                            $null = New-GraphPostRequest -Uri 'https://graph.microsoft.com/beta/groups' -tenantid $Tenant -type POST -body $Body -asApp $true
+                        }
+                    } catch { }
+                }
+                # Compare full policy (template vs existing rendered template) to decide if patch needed
+                $ExistingPolicy = $AllCAPolicies | Where-Object -Property displayName -EQ $Policy.displayName
+                $NeedsPatch = $true
+                if ($ExistingPolicy) {
+                    try {
+                        $ExistingTemplate = ConvertFrom-Json -ErrorAction SilentlyContinue -InputObject (New-CIPPCATemplate -TenantFilter $tenant -JSON ($ExistingPolicy | ConvertTo-Json -Depth 40))
+                        $Compare = Compare-CIPPIntuneObject -ReferenceObject $Policy -DifferenceObject $ExistingTemplate
+                        if (-not $Compare -and ($Setting.state -eq 'donotchange' -or $ExistingPolicy.state -eq $Setting.state)) { $NeedsPatch = $false }
+                    } catch { }
+                }
+                if ($NeedsPatch) {
+                    $null = New-CIPPCAPolicy -replacePattern 'displayName' -TenantFilter $tenant -state $Setting.state -RawJSON $JSONObj -Overwrite $true -APIName $APIName -Headers $Request.Headers -DisableSD $Setting.DisableSD
+                    # refresh policy snapshot after patch for compare field
+                    try { $ExistingPolicy = New-GraphGetRequest -Uri "https://graph.microsoft.com/beta/identity/conditionalAccess/policies?$top=1&$filter=displayName eq '$([Uri]::EscapeDataString($Policy.displayName))'" -tenantid $Tenant -asApp $true | Where-Object displayName -EQ $Policy.displayName } catch { }
+                    try { $ExistingTemplate = ConvertFrom-Json -ErrorAction SilentlyContinue -InputObject (New-CIPPCATemplate -TenantFilter $tenant -JSON ($ExistingPolicy | ConvertTo-Json -Depth 40)) } catch { }
+                    $Compare = Compare-CIPPIntuneObject -ReferenceObject $Policy -DifferenceObject $ExistingTemplate
+                }
+                # Set compare field (even during remediation) for visibility
+                if (-not $Compare) {
+                    Set-CIPPStandardsCompareField -FieldName "standards.ConditionalAccessTemplate.$($Setting.value)" -FieldValue $true -Tenant $Tenant
+                } else {
+                    Set-CIPPStandardsCompareField -FieldName "standards.ConditionalAccessTemplate.$($Setting.value)" -FieldValue $Compare -Tenant $Tenant
+                }
             } catch {
                 $ErrorMessage = Get-NormalizedError -Message $_.Exception.Message
                 Write-LogMessage -API 'Standards' -tenant $tenant -message "Failed to create or update conditional access rule $($JSONObj.displayName). Error: $ErrorMessage" -sev 'Error'
