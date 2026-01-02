@@ -13,12 +13,13 @@ function Invoke-CIPPStandardOWAAttachmentRestrictions {
         CAT
             Exchange Standards
         TAG
-            "zero_trust"
-            "unmanaged_devices"
-            "attachment_restrictions"
-            "data_loss_prevention"
+            "CIS M365 5.0 (6.1.2)"
+            "Security"
+            "NIST CSF 2.0 (PR.AA-05)"
+        EXECUTIVETEXT
+            Restricts access to email attachments on personal or unmanaged devices while allowing full functionality on corporate-managed devices. This security measure prevents data theft through email attachments while maintaining productivity for employees using approved company devices.
         ADDEDCOMPONENT
-            {"type":"select","name":"standards.OWAAttachmentRestrictions.ConditionalAccessPolicy","label":"Attachment Restriction Policy","options":[{"label":"Read Only (View/Edit via Office Online, no download)","value":"ReadOnly"},{"label":"Read Only Plus Attachments Blocked (Cannot see attachments)","value":"ReadOnlyPlusAttachmentsBlocked"}],"defaultValue":"ReadOnlyPlusAttachmentsBlocked"}
+            {"type":"autoComplete","name":"standards.OWAAttachmentRestrictions.ConditionalAccessPolicy","label":"Attachment Restriction Policy","options":[{"label":"Read Only (View/Edit via Office Online, no download)","value":"ReadOnly"},{"label":"Read Only Plus Attachments Blocked (Cannot see attachments)","value":"ReadOnlyPlusAttachmentsBlocked"}],"defaultValue":"ReadOnlyPlusAttachmentsBlocked"}
         IMPACT
             Medium Impact
         ADDEDDATE
@@ -32,11 +33,10 @@ function Invoke-CIPPStandardOWAAttachmentRestrictions {
             Run the Tools\Update-StandardsComments.ps1 script to update this comment block
     .LINK
         https://docs.cipp.app/user-documentation/tenant/standards/list-standards
-        https://learn.microsoft.com/en-us/security/zero-trust/zero-trust-identity-device-access-policies-workloads#exchange-online-recommendations-for-zero-trust
     #>
 
     param($Tenant, $Settings)
-    $TestResult = Test-CIPPStandardLicense -StandardName 'OWAAttachmentRestrictions' -TenantFilter $Tenant -RequiredCapabilities @('EXCHANGE_S_STANDARD', 'EXCHANGE_S_ENTERPRISE', 'EXCHANGE_LITE') #No Foundation because that does not allow powershell access
+    $TestResult = Test-CIPPStandardLicense -StandardName 'OWAAttachmentRestrictions' -TenantFilter $Tenant -RequiredCapabilities @('EXCHANGE_S_STANDARD', 'EXCHANGE_S_ENTERPRISE', 'EXCHANGE_S_STANDARD_GOV', 'EXCHANGE_S_ENTERPRISE_GOV', 'EXCHANGE_LITE') #No Foundation because that does not allow powershell access
 
     if ($TestResult -eq $false) {
         Write-Host "We're exiting as the correct license is not present for this standard."
