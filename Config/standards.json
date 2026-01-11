@@ -4845,7 +4845,7 @@
       "warn": false,
       "remediate": false
     },
-    "impact": "High Impact",
+    "impact": "Low Impact",
     "impactColour": "info",
     "addedDate": "2026-01-11",
     "helpText": "Deploy and maintain Intune reusable settings templates that can be referenced by multiple policies.",
