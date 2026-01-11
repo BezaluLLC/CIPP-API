@@ -4847,7 +4847,7 @@
     },
     "impact": "High Impact",
     "impactColour": "info",
-    "addedDate": "2026-01-02",
+    "addedDate": "2026-01-11",
     "helpText": "Deploy and maintain Intune reusable settings templates that can be referenced by multiple policies.",
     "executiveText": "Creates and keeps reusable Intune settings templates consistent so common firewall and configuration blocks can be reused across many policies.",
     "addedComponent": [

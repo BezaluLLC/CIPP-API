@@ -66,7 +66,7 @@ function Invoke-CIPPStandardReusableSettingsTemplate {
             $MissingLicenseMessage = "This tenant is missing one or more required licenses for this standard: $($RequiredCapabilities -join ', ')."
             Set-CIPPStandardsCompareField -FieldName "standards.ReusableSettingsTemplate.$($_.value)" -FieldValue $MissingLicenseMessage -Tenant $Tenant
         }
-        Write-Host "Exiting as the correct license is not present for this standard. Missing: $($RequiredCapabilities -join ', ')"
+        Write-LogMessage -API 'Standards' -tenant $Tenant -message "Exiting as the correct license is not present for this standard. Missing: $($RequiredCapabilities -join ', ')" -sev 'Warn'
         return $true
     }
 
@@ -80,7 +80,7 @@ function Invoke-CIPPStandardReusableSettingsTemplate {
         return $true
     }
 
-    $AllTemplateEntities = Get-CippAzDataTableEntity @Table -Filter "PartitionKey eq 'IntuneReusableSettingTemplate'"
+    $AllTemplateEntities = Get-CIPPAzDataTableEntity @Table -Filter "PartitionKey eq 'IntuneReusableSettingTemplate'"
     $TemplateEntities = $AllTemplateEntities |
         Where-Object { $_.RowKey -in $SelectedTemplateIds } |
         ForEach-Object { $_.JSON } |
@@ -104,7 +104,7 @@ function Invoke-CIPPStandardReusableSettingsTemplate {
                 $ExistingClean = Remove-CIPPNullProperties -InputObject $ExistingSanitized
                 $Compare = Compare-CIPPIntuneObject -ReferenceObject $BodyObjectClean -DifferenceObject $ExistingClean -compareType 'ReusablePolicySetting' -ErrorAction SilentlyContinue
             } catch {
-                Write-Host "ReusableSettingsTemplate: compare failed for $displayName. $($_.Exception.Message)"
+                Write-LogMessage -API 'Standards' -tenant $Tenant -message "ReusableSettingsTemplate: compare failed for $displayName. $($_.Exception.Message)" -sev 'Error'
             }
         } else {
             $Compare = [pscustomobject]@{
@@ -123,7 +123,7 @@ function Invoke-CIPPStandardReusableSettingsTemplate {
             remediate   = $Settings.remediate
             alert       = $Settings.alert
             report      = $Settings.report
-            templateId  = $TemplateEntity.RowKey
+            templateId  = $TemplateEntity.GUID
             existingId  = $Existing.id
         }
     }
