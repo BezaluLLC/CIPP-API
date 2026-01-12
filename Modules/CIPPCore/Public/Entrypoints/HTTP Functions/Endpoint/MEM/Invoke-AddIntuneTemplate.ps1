@@ -11,63 +11,6 @@ function Invoke-AddIntuneTemplate {
     $APIName = $Request.Params.CIPPEndpoint
     $Headers = $Request.Headers
 
-    function Get-ReusableSettingReferences {
-        param(
-            [Parameter(Mandatory = $true)]
-            $PolicyObject
-        )
-
-        $ids = [System.Collections.Generic.List[string]]::new()
-
-        function Scan-Object {
-            param(
-                $Value,
-                [string]$ParentName = ''
-            )
-
-            if ($null -eq $Value) { return }
-
-            if ($Value -is [System.Collections.IEnumerable] -and $Value -isnot [string]) {
-                foreach ($item in $Value) { Scan-Object -Value $item -ParentName $ParentName }
-                return
-            }
-
-            if ($Value -is [psobject]) {
-                # Capture reference-setting objects that carry GUIDs in their value field
-                if ($Value.'@odata.type' -like '*ReferenceSettingValue' -and $Value.value -match '^[0-9a-fA-F-]{36}$') {
-                    $ids.Add($Value.value)
-                }
-
-                # Fallback: some reference objects lack @odata.type but still sit under simpleSettingCollectionValue
-                if ($ParentName -eq 'simpleSettingCollectionValue' -and $Value.value -is [string] -and $Value.value -match '^[0-9a-fA-F-]{36}$') {
-                    $ids.Add($Value.value)
-                }
-
-                foreach ($prop in $Value.PSObject.Properties) {
-                    $name = $prop.Name
-                    $propValue = $prop.Value
-
-                    if ($name -match 'reusableSetting') {
-                        if ($propValue -is [string] -and $propValue -match '^[0-9a-fA-F-]{36}$') { $ids.Add($propValue) }
-                        elseif ($propValue -is [psobject] -and $propValue.id -match '^[0-9a-fA-F-]{36}$') { $ids.Add($propValue.id) }
-                        elseif ($propValue -is [System.Collections.IEnumerable]) {
-                            foreach ($entry in $propValue) {
-                                if ($entry -is [string] -and $entry -match '^[0-9a-fA-F-]{36}$') { $ids.Add($entry) }
-                                elseif ($entry -is [psobject] -and $entry.id -match '^[0-9a-fA-F-]{36}$') { $ids.Add($entry.id) }
-                            }
-                        }
-                    }
-
-                    Scan-Object -Value $propValue -ParentName $name
-                }
-                return
-            }
-        }
-
-        Scan-Object -Value $PolicyObject
-        return $ids | Select-Object -Unique
-    }
-
     $GUID = (New-Guid).GUID
     try {
         if ($Request.Body.RawJSON) {
@@ -102,92 +45,9 @@ function Invoke-AddIntuneTemplate {
             $ID = $Request.Body.ID ?? $Request.Query.ID
             $ODataType = $Request.Body.ODataType ?? $Request.Query.ODataType
             $Template = New-CIPPIntuneTemplate -TenantFilter $TenantFilter -URLName $URLName -ID $ID -ODataType $ODataType
-            Write-Host "Template: $Template"
-            $reusableTemplateRefs = @()
-            try {
-                $policyObject = $Template.TemplateJson | ConvertFrom-Json -Depth 300 -ErrorAction Stop
-                $referencedReusableIds = if ($policyObject) { Get-ReusableSettingReferences -PolicyObject $policyObject } else { @() }
-                Write-Information "ReusableSettings discovery: found $($referencedReusableIds.Count) ids -> $($referencedReusableIds -join ',')"
 
-                if ($referencedReusableIds) {
-                    $templatesTable = Get-CippTable -tablename 'templates'
-                    $templatesTableForAdd = @{} + $templatesTable
-                    $templatesTableForAdd.Force = $true
-                    $existingReusableTemplates = @(Get-CIPPAzDataTableEntity @templatesTable -Filter "PartitionKey eq 'IntuneReusableSettingTemplate'")
-
-                    foreach ($settingId in $referencedReusableIds) {
-                        Write-Information "Reusable setting loop start for $settingId"
-                        try {
-                            $setting = New-GraphGETRequest -Uri "https://graph.microsoft.com/beta/deviceManagement/reusablePolicySettings/$settingId" -tenantid $TenantFilter
-                            if (-not $setting) {
-                                Write-LogMessage -headers $Headers -API $APIName -message "Reusable setting $settingId not returned from Graph" -Sev 'Warn'
-                                continue
-                            }
-                            $settingDisplayName = $setting.displayName
-                            if (-not $settingDisplayName) {
-                                Write-LogMessage -headers $Headers -API $APIName -message "Reusable setting $settingId missing displayName" -Sev 'Warn'
-                                continue
-                            }
-
-                            Write-LogMessage -headers $Headers -API $APIName -message "Reusable setting $settingId displayName '$settingDisplayName' discovered" -Sev 'Info'
-
-                            $matchedTemplate = $existingReusableTemplates |
-                                Where-Object { $_.DisplayName -eq $settingDisplayName } |
-                                Select-Object -First 1
-
-                            if (-not $matchedTemplate) {
-                                $matchedTemplate = $existingReusableTemplates |
-                                    Where-Object { ($_.JSON | ConvertFrom-Json -ErrorAction SilentlyContinue).DisplayName -eq $settingDisplayName } |
-                                    Select-Object -First 1
-                            }
-
-                            $templateGuid = $matchedTemplate.RowKey
-
-                            if (-not $templateGuid) {
-                                $cleanSetting = Remove-CIPPReusableSettingMetadata -InputObject $setting
-                                $sanitizedJson = $cleanSetting | ConvertTo-Json -Depth 100 -Compress
-                                $templateGuid = (New-Guid).Guid
-                                $reusableEntity = [pscustomobject]@{
-                                    DisplayName = $settingDisplayName
-                                    Description = $setting.description
-                                    RawJSON     = $sanitizedJson
-                                    GUID        = $templateGuid
-                                } | ConvertTo-Json -Depth 100 -Compress
-
-                                Add-CIPPAzDataTableEntity @templatesTableForAdd -Entity @{
-                                    JSON         = "$reusableEntity"
-                                    RowKey       = "$templateGuid"
-                                    PartitionKey = 'IntuneReusableSettingTemplate'
-                                    GUID         = "$templateGuid"
-                                    DisplayName  = $settingDisplayName
-                                }
-
-                                $existingReusableTemplates += [pscustomobject]@{
-                                    RowKey      = $templateGuid
-                                    DisplayName = $settingDisplayName
-                                    JSON        = $reusableEntity
-                                }
-
-                                Write-LogMessage -headers $Headers -API $APIName -message "Created reusable setting template $templateGuid for '$settingDisplayName'" -Sev 'Info'
-                            } else {
-                                Write-LogMessage -headers $Headers -API $APIName -message "Reusing existing reusable setting template $templateGuid for '$settingDisplayName'" -Sev 'Info'
-                            }
-
-                            $reusableTemplateRefs += [pscustomobject]@{
-                                displayName = $settingDisplayName
-                                templateId  = $templateGuid
-                                sourceId    = $settingId
-                            }
-                        } catch {
-                            Write-LogMessage -headers $Headers -API $APIName -message "Failed to link reusable setting $settingId for template creation: $($_.Exception.Message)" -Sev 'Warn'
-                        }
-                    }
-
-                    Write-LogMessage -headers $Headers -API $APIName -message "Reusable settings mapped: $($reusableTemplateRefs.Count) -> $($reusableTemplateRefs.displayName -join ', ')" -Sev 'Info'
-                }
-            } catch {
-                Write-LogMessage -headers $Headers -API $APIName -message "Reusable settings discovery failed: $($_.Exception.Message)" -Sev 'Warn'
-            }
+            $reusableResult = Get-CIPPReusableSettingsFromPolicy -PolicyJson $Template.TemplateJson -Tenant $TenantFilter -Headers $Headers -APIName $APIName
+            $reusableTemplateRefs = $reusableResult.ReusableSettings
 
             $objectData = [PSCustomObject]@{
                 Displayname      = $Template.DisplayName
@@ -203,12 +63,10 @@ function Invoke-AddIntuneTemplate {
             $Table.Force = $true
             Add-CIPPAzDataTableEntity @Table -Entity @{
                 JSON              = "$object"
-                ReusableSettingsCount = $reusableTemplateRefs.Count
                 RowKey            = "$GUID"
                 PartitionKey      = 'IntuneTemplate'
-                GUID              = "$GUID"
             }
-            Write-LogMessage -headers $Headers -API $APIName -message "Created intune policy template $($Template.DisplayName) with GUID $GUID using an original policy from a tenant" -Sev 'Debug'
+            Write-LogMessage -headers $Headers -API $APIName -message "Created intune policy template $($Request.Body.displayName) with GUID $GUID using an original policy from a tenant" -Sev 'Debug'
 
             $Result = 'Successfully added template'
             $StatusCode = [HttpStatusCode]::OK
@@ -216,7 +74,7 @@ function Invoke-AddIntuneTemplate {
     } catch {
         $StatusCode = [HttpStatusCode]::InternalServerError
         $ErrorMessage = Get-CippException -Exception $_
-        $Result = "Intune Template Deployment failed: $($ErrorMessage.NormalizedError)"
+        $Result = "Intune Template Deployment failed: $($ErrorMessage.NormalizedMessage)"
         Write-LogMessage -headers $Headers -API $APIName -message $Result -Sev 'Error' -LogData $ErrorMessage
     }
 
