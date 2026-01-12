@@ -17,7 +17,7 @@ function Invoke-CIPPStandardReusableSettingsTemplate {
         DISABLEDFEATURES
             {"report":false,"warn":false,"remediate":false}
         IMPACT
-            High Impact
+            Low Impact
         ADDEDDATE
             2026-01-11
         EXECUTIVETEXT
