@@ -72,8 +72,8 @@ Describe 'Invoke-CIPPStandardReusableSettingsTemplate' {
         $result | Should -BeTrue
         $compareFields.Field | Should -Contain 'standards.ReusableSettingsTemplate.template-one'
         $compareFields.Field | Should -Contain 'standards.ReusableSettingsTemplate.template-two'
-        Assert-MockCalled Get-CippAzDataTableEntity -Times 0
-        Assert-MockCalled New-GraphGETRequest -Times 0
+        Should -Invoke Get-CippAzDataTableEntity -Times 0
+        Should -Invoke New-GraphGETRequest -Times 0
     }
 
     It 'creates missing reusable settings when remediate is enabled' {
