@@ -19,7 +19,7 @@ function Invoke-CIPPStandardReusableSettingsTemplate {
         IMPACT
             High Impact
         ADDEDDATE
-            2026-01-02
+            2026-01-11
         EXECUTIVETEXT
             Creates and maintains reusable Intune settings templates that can be referenced by multiple policies, ensuring consistent firewall and configuration rule blocks are centrally managed and updated.
         ADDEDCOMPONENT
