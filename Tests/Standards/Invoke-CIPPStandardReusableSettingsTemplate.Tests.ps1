@@ -93,7 +93,7 @@ Describe 'Invoke-CIPPStandardReusableSettingsTemplate' {
         Invoke-CIPPStandardReusableSettingsTemplate -Tenant $tenant -Settings $settings
 
         $createCalls | Should -Be 1
-        Assert-MockCalled New-GraphPOSTRequest -ParameterFilter { $type -eq 'POST' -and $uri -like '*reusablePolicySettings' } -Times 1
+        Should -Invoke New-GraphPOSTRequest -ParameterFilter { $type -eq 'POST' -and $uri -like '*reusablePolicySettings' } -Times 1
         $compareFields | Should -BeNullOrEmpty
     }
 
@@ -110,8 +110,8 @@ Describe 'Invoke-CIPPStandardReusableSettingsTemplate' {
         Invoke-CIPPStandardReusableSettingsTemplate -Tenant $tenant -Settings $settings
 
         $updateCalls | Should -Be 1
-        Assert-MockCalled New-GraphPOSTRequest -ParameterFilter { $type -eq 'PUT' -and $uri -like '*reusablePolicySettings/existing-1' } -Times 1
-        Assert-MockCalled New-GraphPOSTRequest -ParameterFilter { $type -eq 'POST' } -Times 0
+        Should -Invoke New-GraphPOSTRequest -ParameterFilter { $type -eq 'PUT' -and $uri -like '*reusablePolicySettings/existing-1' } -Times 1
+        Should -Invoke New-GraphPOSTRequest -ParameterFilter { $type -eq 'POST' } -Times 0
     }
 
     It 'writes standards alerts when alerting is enabled and drift exists' {
@@ -147,6 +147,6 @@ Describe 'Invoke-CIPPStandardReusableSettingsTemplate' {
         $logs.Where({ $_.Message -like '*is compliant.*' }).Count | Should -Be 1
         $compareFields | Should -HaveCount 1
         $compareFields[0].Value | Should -BeTrue
-        Assert-MockCalled Write-StandardsAlert -Times 0
+        Should -Invoke -CommandName Write-StandardsAlert -Times 0
     }
 }
