@@ -13,13 +13,13 @@ function Invoke-AddIntuneReusableSettingTemplate {
 
     $GUID = $Request.Body.GUID ?? (New-Guid).GUID
 
-    function Normalize-ReusableSettingCollections {
+    function Format-ReusableSettingCollections {
         param($InputObject)
 
         if ($null -eq $InputObject) { return }
 
         if ($InputObject -is [System.Collections.IEnumerable] -and -not ($InputObject -is [string])) {
-            foreach ($item in $InputObject) { Normalize-ReusableSettingCollections -InputObject $item }
+            foreach ($item in $InputObject) { Format-ReusableSettingCollections -InputObject $item }
             return
         }
 
@@ -31,7 +31,7 @@ function Invoke-AddIntuneReusableSettingTemplate {
                     continue
                 }
 
-                Normalize-ReusableSettingCollections -InputObject $prop.Value
+                Format-ReusableSettingCollections -InputObject $prop.Value
             }
         }
     }
@@ -52,7 +52,7 @@ function Invoke-AddIntuneReusableSettingTemplate {
         }
 
         # Normalize required collections and deep-clean Graph metadata/nulls before storing
-        Normalize-ReusableSettingCollections -InputObject $parsed
+        Format-ReusableSettingCollections -InputObject $parsed
         $cleanParsed = Remove-CIPPReusableSettingMetadata -InputObject $parsed
         $sanitizedJson = $cleanParsed | ConvertTo-Json -Depth 100 -Compress
 
