@@ -154,9 +154,6 @@ function Invoke-CIPPStandardIntuneTemplate {
                     tenantFilter  = $Tenant
                 }
 
-                $reusableSettings = $TemplateFile.body.ReusableSettings ?? $TemplateFile.body.reusableSettings
-                if ($reusableSettings) { $PolicyParams.ReusableSettings = $reusableSettings }
-
                 # Add assignment filter if specified
                 if ($TemplateFile.assignmentFilter) {
                     $PolicyParams.AssignmentFilterName = $TemplateFile.assignmentFilter
