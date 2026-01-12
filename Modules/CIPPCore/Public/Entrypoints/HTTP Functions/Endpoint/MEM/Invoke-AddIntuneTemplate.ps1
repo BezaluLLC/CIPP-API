@@ -25,7 +25,7 @@ function Invoke-AddIntuneTemplate {
                 Type              = $Request.Body.TemplateType
                 GUID              = $GUID
                 ReusableSettings  = $reusableTemplateRefs
-            } | ConvertTo-Json -Depth 100
+            } | ConvertTo-Json
             $Table = Get-CippTable -tablename 'templates'
             $Table.Force = $true
             Add-CIPPAzDataTableEntity @Table -Entity @{
@@ -49,7 +49,7 @@ function Invoke-AddIntuneTemplate {
             $reusableResult = Get-CIPPReusableSettingsFromPolicy -PolicyJson $Template.TemplateJson -Tenant $TenantFilter -Headers $Headers -APIName $APIName
             $reusableTemplateRefs = $reusableResult.ReusableSettings
 
-            $objectData = [PSCustomObject]@{
+            $object = [PSCustomObject]@{
                 Displayname      = $Template.DisplayName
                 Description      = $Template.Description
                 RAWJson          = $Template.TemplateJson
@@ -58,13 +58,12 @@ function Invoke-AddIntuneTemplate {
                 ReusableSettings = $reusableTemplateRefs
             }
 
-            $object = $objectData | ConvertTo-Json -Depth 100
             $Table = Get-CippTable -tablename 'templates'
             $Table.Force = $true
             Add-CIPPAzDataTableEntity @Table -Entity @{
-                JSON              = "$object"
-                RowKey            = "$GUID"
-                PartitionKey      = 'IntuneTemplate'
+                JSON         = "$object"
+                RowKey       = "$GUID"
+                PartitionKey = 'IntuneTemplate'
             }
             Write-LogMessage -headers $Headers -API $APIName -message "Created intune policy template $($Request.Body.displayName) with GUID $GUID using an original policy from a tenant" -Sev 'Debug'
 
