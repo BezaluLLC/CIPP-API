@@ -7,7 +7,7 @@ function Get-CIPPReusableSettingsFromPolicy {
     )
 
     $result = [pscustomobject]@{
-        ReusableSettings = @()
+        ReusableSettings = [System.Collections.Generic.List[psobject]]::new()
     }
 
     if (-not $PolicyJson) { return $result }
@@ -142,11 +142,11 @@ function Get-CIPPReusableSettingsFromPolicy {
                 Write-LogMessage -headers $Headers -API $APIName -message "Reusing existing reusable setting template $templateGuid for '$settingDisplayName'" -Sev 'Info'
             }
 
-            $result.ReusableSettings += [pscustomobject]@{
-                displayName = $settingDisplayName
-                templateId  = $templateGuid
-                sourceId    = $settingId
-            }
+            $result.ReusableSettings.Add([pscustomobject]@{
+                    displayName = $settingDisplayName
+                    templateId  = $templateGuid
+                    sourceId    = $settingId
+                })
         } catch {
             Write-LogMessage -headers $Headers -API $APIName -message "Failed to link reusable setting $settingId for template creation: $($_.Exception.Message)" -Sev 'Warn'
         }
