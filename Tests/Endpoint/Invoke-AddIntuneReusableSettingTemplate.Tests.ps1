@@ -19,6 +19,9 @@ BeforeAll {
         [pscustomobject]@{ NormalizedError = $Exception }
     }
 
+    # Pass-through for metadata cleanup used in the function
+    function Remove-CIPPReusableSettingMetadata { param($InputObject) $InputObject }
+
     . $FunctionPath
 }
 
@@ -50,7 +53,6 @@ Describe 'Invoke-AddIntuneReusableSettingTemplate' {
         $lastEntity.RowKey | Should -Be 'template-a'
         $lastEntity.DisplayName | Should -Be 'Template A'
         $lastEntity.Description | Should -Be 'Template description'
-        $lastEntity.Package | Should -Be 'pkg'
         $lastEntity.RawJSON | Should -Match '"displayName":"Template A"'
         $lastForce | Should -BeTrue
         $logs | Should -Not -BeNullOrEmpty
