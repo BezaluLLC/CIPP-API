@@ -59,8 +59,16 @@ function Invoke-CIPPStandardIntuneTemplate {
             Write-LogMessage -API 'Standards' -tenant $tenant -message "Failed to find template $($Template.TemplateList.value). Has this Intune Template been deleted?" -sev 'Error'
             continue
         }
-        $reusableSync = Sync-CIPPReusablePolicySettings -TemplateInfo $Request.body -Tenant $Tenant
-        if ($reusableSync.RawJSON) { $Request.body.RawJSON = $reusableSync.RawJSON }
+        try {
+            $reusableSync = Sync-CIPPReusablePolicySettings -TemplateInfo $Request.body -Tenant $Tenant -ErrorAction Stop
+            if ($null -ne $reusableSync -and $reusableSync.PSObject.Properties.Name -contains 'RawJSON' -and $reusableSync.RawJSON) {
+                $Request.body.RawJSON = $reusableSync.RawJSON
+            }
+        } catch {
+            Write-LogMessage -API 'Standards' -tenant $tenant -message "Failed to sync reusable policy settings for template $($Template.TemplateList.value): $($_.Exception.Message)" -sev 'Error'
+            Write-Host "IntuneTemplate: $($Template.TemplateList.value) - Failed to sync reusable policy settings. Skipping this template."
+            continue
+        }
         Write-Host "IntuneTemplate: $($Template.TemplateList.value) - Got template."
 
         $displayname = $request.body.Displayname
