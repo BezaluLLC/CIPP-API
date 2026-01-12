@@ -18,10 +18,9 @@ function Invoke-ListIntuneReusableSettingTemplates {
             $Parsed = $Item.JSON | ConvertFrom-Json -Depth 100 -ErrorAction SilentlyContinue
         }
 
-        $DisplayName = $Parsed.DisplayName ?? $Parsed.displayName ?? $Item.RowKey
-        $Description = $Parsed.Description ?? $Parsed.description
-        $RawJSON = $Parsed.RawJSON
-
+        $DisplayName = $Parsed.DisplayName ?? $Parsed.displayName ?? $Item.DisplayName ?? $Item.RowKey
+        $Description = $Parsed.Description ?? $Parsed.description ?? $Item.Description
+        $RawJSON = $Parsed.RawJSON ?? $Item.RawJSON
         [PSCustomObject]@{
             displayName = $DisplayName
             description = $Description

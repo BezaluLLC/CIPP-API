@@ -59,7 +59,6 @@ function Invoke-AddIntuneReusableSettingTemplate {
         $entity = [pscustomobject]@{
             DisplayName = $displayName
             Description = $description
-            Package     = $Request.Body.package ?? $Request.Body.Package
             RawJSON     = $sanitizedJson
             GUID        = $GUID
         } | ConvertTo-Json -Depth 100 -Compress
@@ -73,7 +72,6 @@ function Invoke-AddIntuneReusableSettingTemplate {
             GUID         = "$GUID"
             DisplayName  = $displayName
             Description  = $description
-            Package      = $Request.Body.package ?? $Request.Body.Package
             RawJSON      = $sanitizedJson
         }
 
