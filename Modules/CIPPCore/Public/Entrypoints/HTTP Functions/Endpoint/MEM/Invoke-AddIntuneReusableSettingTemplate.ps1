@@ -54,7 +54,7 @@ function Invoke-AddIntuneReusableSettingTemplate {
         # Normalize required collections and deep-clean Graph metadata/nulls before storing
         Format-ReusableSettingCollections -InputObject $parsed
         $cleanParsed = Remove-CIPPReusableSettingMetadata -InputObject $parsed
-        $sanitizedJson = $cleanParsed | ConvertTo-Json -Depth 100 -Compress
+        $sanitizedJson = ($cleanParsed | ConvertTo-Json -Depth 100 -Compress)
 
         $entity = [pscustomobject]@{
             DisplayName = $displayName
@@ -72,7 +72,7 @@ function Invoke-AddIntuneReusableSettingTemplate {
             GUID         = "$GUID"
             DisplayName  = $displayName
             Description  = $description
-            RawJSON      = $sanitizedJson
+            RawJSON      = "$sanitizedJson" # ensure string serialization for table storage
         }
 
         Write-LogMessage -headers $Headers -API $APINAME -message "Created Intune reusable setting template named $displayName with GUID $GUID" -Sev 'Debug'

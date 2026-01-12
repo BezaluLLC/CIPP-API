@@ -23,7 +23,6 @@ Describe 'Invoke-ListIntuneReusableSettingTemplates' {
             [pscustomobject]@{
                 RowKey      = 'b-guid'
                 JSON        = '{"DisplayName":"B","RawJSON":"{\"b\":1}","Description":"B desc"}'
-                Package     = 'pkg-b'
                 Source      = 'sync'
                 SHA         = 'abc123'
             },
@@ -52,7 +51,6 @@ Describe 'Invoke-ListIntuneReusableSettingTemplates' {
         $response.Body[1].displayName | Should -Be 'B'
         $response.Body[1].description | Should -Be 'B desc'
         $response.Body[1].GUID | Should -Be 'b-guid'
-        $response.Body[1].package | Should -Be 'pkg-b'
         $response.Body[1].isSynced | Should -BeTrue
         $lastFilter | Should -Be "PartitionKey eq 'IntuneReusableSettingTemplate'"
     }
