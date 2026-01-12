@@ -39,7 +39,6 @@ Describe 'Invoke-AddIntuneReusableSettingTemplate' {
             Body    = [pscustomobject]@{
                 displayName = 'Template A'
                 description = 'Template description'
-                package     = 'pkg'
                 rawJSON     = '{"displayName":"Template A"}'
                 GUID        = 'template-a'
             }
