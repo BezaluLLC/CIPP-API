@@ -11,30 +11,6 @@ function Invoke-AddIntuneTemplate {
     $APIName = $Request.Params.CIPPEndpoint
     $Headers = $Request.Headers
 
-    function Remove-ReusableSettingMetadata {
-        param($InputObject)
-
-        if ($null -eq $InputObject) { return $null }
-
-        if ($InputObject -is [System.Collections.IEnumerable] -and $InputObject -isnot [string]) {
-            $CleanArray = @()
-            foreach ($item in $InputObject) { $CleanArray += Remove-ReusableSettingMetadata -InputObject $item }
-            return $CleanArray
-        }
-
-        if ($InputObject -is [psobject]) {
-            $Output = [ordered]@{}
-            foreach ($prop in $InputObject.PSObject.Properties) {
-                if ($null -eq $prop.Value) { continue }
-                if ($prop.Name -in @('id','createdDateTime','lastModifiedDateTime','version','@odata.context','@odata.etag','referencingConfigurationPolicyCount','settingInstanceTemplateReference','settingValueTemplateReference','auditRuleInformation')) { continue }
-                $Output[$prop.Name] = Remove-ReusableSettingMetadata -InputObject $prop.Value
-            }
-            return [pscustomobject]$Output
-        }
-
-        return $InputObject
-    }
-
     function Get-ReusableSettingReferences {
         param(
             [Parameter(Mandatory = $true)]
@@ -135,10 +111,12 @@ function Invoke-AddIntuneTemplate {
 
                 if ($referencedReusableIds) {
                     $templatesTable = Get-CippTable -tablename 'templates'
-                    $templatesTable.Force = $true
-                    $existingReusableTemplates = Get-CIPPAzDataTableEntity @templatesTable -Filter "PartitionKey eq 'IntuneReusableSettingTemplate'"
+                    $templatesTableForAdd = @{} + $templatesTable
+                    $templatesTableForAdd.Force = $true
+                    $existingReusableTemplates = @(Get-CIPPAzDataTableEntity @templatesTable -Filter "PartitionKey eq 'IntuneReusableSettingTemplate'")
 
                     foreach ($settingId in $referencedReusableIds) {
+                        Write-Information "Reusable setting loop start for $settingId"
                         try {
                             $setting = New-GraphGETRequest -Uri "https://graph.microsoft.com/beta/deviceManagement/reusablePolicySettings/$settingId" -tenantid $TenantFilter
                             if (-not $setting) {
@@ -166,7 +144,7 @@ function Invoke-AddIntuneTemplate {
                             $templateGuid = $matchedTemplate.RowKey
 
                             if (-not $templateGuid) {
-                                $cleanSetting = Remove-ReusableSettingMetadata -InputObject $setting
+                                $cleanSetting = Remove-CIPPReusableSettingMetadata -InputObject $setting
                                 $sanitizedJson = $cleanSetting | ConvertTo-Json -Depth 100 -Compress
                                 $templateGuid = (New-Guid).Guid
                                 $reusableEntity = [pscustomobject]@{
@@ -176,7 +154,7 @@ function Invoke-AddIntuneTemplate {
                                     GUID        = $templateGuid
                                 } | ConvertTo-Json -Depth 100 -Compress
 
-                                Add-CIPPAzDataTableEntity @templatesTable -Force -Entity @{
+                                Add-CIPPAzDataTableEntity @templatesTableForAdd -Entity @{
                                     JSON         = "$reusableEntity"
                                     RowKey       = "$templateGuid"
                                     PartitionKey = 'IntuneReusableSettingTemplate'

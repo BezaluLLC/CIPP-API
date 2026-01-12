@@ -13,28 +13,27 @@ function Invoke-AddIntuneReusableSettingTemplate {
 
     $GUID = $Request.Body.GUID ?? (New-Guid).GUID
 
-    function Remove-ReusableSettingMetadata {
+    function Normalize-ReusableSettingCollections {
         param($InputObject)
 
-        if ($null -eq $InputObject) { return $null }
+        if ($null -eq $InputObject) { return }
 
-        if ($InputObject -is [System.Collections.IEnumerable] -and $InputObject -isnot [string]) {
-            $CleanArray = @()
-            foreach ($item in $InputObject) { $CleanArray += Remove-ReusableSettingMetadata -InputObject $item }
-            return $CleanArray
+        if ($InputObject -is [System.Collections.IEnumerable] -and -not ($InputObject -is [string])) {
+            foreach ($item in $InputObject) { Normalize-ReusableSettingCollections -InputObject $item }
+            return
         }
 
         if ($InputObject -is [psobject]) {
-            $Output = [ordered]@{}
             foreach ($prop in $InputObject.PSObject.Properties) {
-                if ($null -eq $prop.Value) { continue }
-                if ($prop.Name -in @('id','createdDateTime','lastModifiedDateTime','version','@odata.context','@odata.etag','referencingConfigurationPolicyCount','settingInstanceTemplateReference','settingValueTemplateReference','auditRuleInformation')) { continue }
-                $Output[$prop.Name] = Remove-ReusableSettingMetadata -InputObject $prop.Value
-            }
-            return [pscustomobject]$Output
-        }
+                if ($prop.Name -ieq 'children' -and $null -eq $prop.Value) {
+                    # Graph requires children to be an array; null collections must be normalized.
+                    $prop.Value = @()
+                    continue
+                }
 
-        return $InputObject
+                Normalize-ReusableSettingCollections -InputObject $prop.Value
+            }
+        }
     }
 
     try {
@@ -52,13 +51,15 @@ function Invoke-AddIntuneReusableSettingTemplate {
             throw "RawJSON is not valid JSON: $($_.Exception.Message)"
         }
 
-        # Deep-clean Graph metadata and nulls so the JSON remains reusable and compact
-        $cleanParsed = Remove-ReusableSettingMetadata -InputObject $parsed
+        # Normalize required collections and deep-clean Graph metadata/nulls before storing
+        Normalize-ReusableSettingCollections -InputObject $parsed
+        $cleanParsed = Remove-CIPPReusableSettingMetadata -InputObject $parsed
         $sanitizedJson = $cleanParsed | ConvertTo-Json -Depth 100 -Compress
 
         $entity = [pscustomobject]@{
             DisplayName = $displayName
             Description = $description
+            Package     = $Request.Body.package ?? $Request.Body.Package
             RawJSON     = $sanitizedJson
             GUID        = $GUID
         } | ConvertTo-Json -Depth 100 -Compress
@@ -70,6 +71,10 @@ function Invoke-AddIntuneReusableSettingTemplate {
             RowKey       = "$GUID"
             PartitionKey = 'IntuneReusableSettingTemplate'
             GUID         = "$GUID"
+            DisplayName  = $displayName
+            Description  = $description
+            Package      = $Request.Body.package ?? $Request.Body.Package
+            RawJSON      = $sanitizedJson
         }
 
         Write-LogMessage -headers $Headers -API $APINAME -message "Created Intune reusable setting template named $displayName with GUID $GUID" -Sev 'Debug'
