@@ -4,8 +4,8 @@ function Remove-CIPPReusableSettingMetadata {
     if ($null -eq $InputObject) { return $null }
 
     if ($InputObject -is [System.Collections.IEnumerable] -and $InputObject -isnot [string]) {
-        $cleanArray = @()
-        foreach ($item in $InputObject) { $cleanArray += Remove-CIPPReusableSettingMetadata -InputObject $item }
+        $cleanArray = [System.Collections.Generic.List[object]]::new()
+        foreach ($item in $InputObject) { $cleanArray.Add((Remove-CIPPReusableSettingMetadata -InputObject $item)) }
         return $cleanArray
     }
 

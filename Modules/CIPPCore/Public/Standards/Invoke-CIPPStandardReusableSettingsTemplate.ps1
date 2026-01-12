@@ -39,9 +39,9 @@ function Invoke-CIPPStandardReusableSettingsTemplate {
         }
 
         if ($InputObject -is [System.Collections.IEnumerable] -and $InputObject -isnot [string]) {
-            $CleanArray = @()
+            $CleanArray = [System.Collections.Generic.List[object]]::new()
             foreach ($item in $InputObject) {
-                $CleanArray += Remove-CIPPNullProperties -InputObject $item
+                $CleanArray.Add((Remove-CIPPNullProperties -InputObject $item))
             }
             return $CleanArray
         }
@@ -82,7 +82,7 @@ function Invoke-CIPPStandardReusableSettingsTemplate {
 
     $AllTemplateEntities = Get-CIPPAzDataTableEntity @Table -Filter "PartitionKey eq 'IntuneReusableSettingTemplate'"
     $TemplateEntities = $AllTemplateEntities |
-        Where-Object { $_.RowKey -in $SelectedTemplateIds } |
+        Where-Object { ($_.RowKey -in $SelectedTemplateIds) -and (-not [string]::IsNullOrWhiteSpace($_.JSON)) } |
         ForEach-Object { $_.JSON } |
         ConvertFrom-Json -ErrorAction SilentlyContinue
     if (-not $TemplateEntities) {
