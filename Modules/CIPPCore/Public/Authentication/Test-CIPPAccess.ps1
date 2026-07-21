@@ -328,6 +328,23 @@ function Test-CIPPAccess {
             $Tenants = Get-Tenants -IncludeErrors
             $swTenantsLoad.Stop()
             $AccessTimings['LoadTenants'] = $swTenantsLoad.Elapsed.TotalMilliseconds
+
+            $OwnTenantIds = @()
+            if ($Type -eq 'User' -and $User.userDetails -match '^[^@]+@(?<domain>[^@]+)$') {
+                $UserDomain = $Matches.domain
+                $MatchingOwnTenants = @(
+                    $Tenants | Where-Object {
+                        $_.defaultDomainName -eq $UserDomain -or $_.initialDomainName -eq $UserDomain
+                    }
+                )
+
+                if ($MatchingOwnTenants.Count -eq 1) {
+                    $OwnTenantIds = @($MatchingOwnTenants.customerId)
+                } elseif ($MatchingOwnTenants.Count -gt 1) {
+                    Write-Warning "Could not resolve own tenant for '$($User.userDetails)' because '$UserDomain' matches multiple tenants."
+                }
+            }
+
             $PermissionsFound = $false
             $swRolePerms = [System.Diagnostics.Stopwatch]::StartNew()
             $PermissionSet = foreach ($CustomRole in $CustomRoles) {
@@ -358,6 +375,8 @@ function Test-CIPPAccess {
                                         Write-Warning "Failed to expand tenant group '$($AllowedItem.label)': $($_.Exception.Message)"
                                         @()
                                     }
+                                } elseif ($AllowedItem -eq 'OwnTenant') {
+                                    $OwnTenantIds
                                 } else {
                                     $AllowedItem
                                 }
@@ -424,12 +443,20 @@ function Test-CIPPAccess {
                         # Check tenant level access
                         if (($Role.BlockedTenants | Measure-Object).Count -eq 0 -and $Role.AllowedTenants -contains 'AllTenants') {
                             $TenantAllowed = $true
+                        } elseif ($TenantFilter -eq 'AllTenants' -and $Role.AllowedTenants -contains 'OwnTenant' -and $Role.AllowedTenants -notcontains 'AllTenants') {
+                            $TenantAllowed = $false
                         } elseif ($TenantFilter -eq 'AllTenants' -and $ApiRole -match 'Write$') {
                             $TenantAllowed = $false
                         } elseif ($TenantFilter -eq 'AllTenants' -and $ApiRole -match 'Read$') {
                             $TenantAllowed = $true
                         } else {
-                            $Tenant = ($Tenants | Where-Object { $TenantFilter -eq $_.customerId -or $TenantFilter -eq $_.defaultDomainName }).customerId
+                            $Tenant = (
+                                $Tenants | Where-Object {
+                                    $TenantFilter -eq $_.customerId -or
+                                    $TenantFilter -eq $_.defaultDomainName -or
+                                    $TenantFilter -eq $_.initialDomainName
+                                }
+                            ).customerId
 
                             # Expand allowed tenant groups to individual tenant IDs
                             $ExpandedAllowedTenants = foreach ($AllowedItem in $Role.AllowedTenants) {
@@ -441,6 +468,8 @@ function Test-CIPPAccess {
                                         Write-Warning "Failed to expand allowed tenant group '$($AllowedItem.label)': $($_.Exception.Message)"
                                         @()
                                     }
+                                } elseif ($AllowedItem -eq 'OwnTenant') {
+                                    $OwnTenantIds
                                 } else {
                                     $AllowedItem
                                 }

@@ -36,6 +36,7 @@ function Invoke-ListCustomRole {
             $IPRanges = @()
         }
 
+
         $RoleList.Add([pscustomobject]@{
                 RoleName       = $Role
                 Type           = 'Built-In'
@@ -61,7 +62,13 @@ function Invoke-ListCustomRole {
         if ($Role.AllowedTenants) {
             try {
                 $AllowedTenants = $Role.AllowedTenants | ConvertFrom-Json -ErrorAction Stop | ForEach-Object {
-                    if ($_ -is [PSCustomObject] -and $_.type -eq 'Group') {
+                    if ($_ -eq 'OwnTenant') {
+                        [PSCustomObject]@{
+                            type  = 'OwnTenant'
+                            value = 'OwnTenant'
+                            label = 'Own Tenant'
+                        }
+                    } elseif ($_ -is [PSCustomObject] -and $_.type -eq 'Group') {
                         # Return group objects as-is for frontend display
                         [PSCustomObject]@{
                             type  = 'Group'
@@ -146,4 +153,3 @@ function Invoke-ListCustomRole {
             Body       = ConvertTo-Json -InputObject $Body -Depth 5
         })
 }
-
